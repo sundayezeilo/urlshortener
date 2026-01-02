@@ -52,20 +52,6 @@ func (q *Queries) CreateLink(ctx context.Context, arg CreateLinkParams) (Link, e
 	return i, err
 }
 
-const deleteLink = `-- name: DeleteLink :exec
-UPDATE links
-SET
-    deleted_at = now(),
-    updated_at = now()
-WHERE slug = $1
-  AND deleted_at IS NULL
-`
-
-func (q *Queries) DeleteLink(ctx context.Context, slug string) error {
-	_, err := q.db.Exec(ctx, deleteLink, slug)
-	return err
-}
-
 const getLink = `-- name: GetLink :one
 SELECT
     id,
@@ -145,4 +131,18 @@ func (q *Queries) ListLinks(ctx context.Context, arg ListLinksParams) ([]Link, e
 		return nil, err
 	}
 	return items, nil
+}
+
+const softDeleteLink = `-- name: SoftDeleteLink :exec
+UPDATE links
+SET
+    deleted_at = now(),
+    updated_at = now()
+WHERE slug = $1
+  AND deleted_at IS NULL
+`
+
+func (q *Queries) SoftDeleteLink(ctx context.Context, slug string) error {
+	_, err := q.db.Exec(ctx, softDeleteLink, slug)
+	return err
 }
