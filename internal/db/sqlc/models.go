@@ -17,5 +17,4 @@ type Link struct {
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
 	LastAccessedAt pgtype.Timestamptz
-	DeletedAt      pgtype.Timestamptz
 }
