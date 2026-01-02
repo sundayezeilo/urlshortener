@@ -52,7 +52,7 @@ func (q *Queries) CreateLink(ctx context.Context, arg CreateLinkParams) (Link, e
 	return i, err
 }
 
-const getLink = `-- name: GetLink :one
+const getLinkBySLug = `-- name: GetLinkBySLug :one
 SELECT
     id,
     original_url,
@@ -67,8 +67,8 @@ WHERE slug = $1
   AND deleted_at IS NULL
 `
 
-func (q *Queries) GetLink(ctx context.Context, slug string) (Link, error) {
-	row := q.db.QueryRow(ctx, getLink, slug)
+func (q *Queries) GetLinkBySLug(ctx context.Context, slug string) (Link, error) {
+	row := q.db.QueryRow(ctx, getLinkBySLug, slug)
 	var i Link
 	err := row.Scan(
 		&i.ID,
@@ -131,6 +131,40 @@ func (q *Queries) ListLinks(ctx context.Context, arg ListLinksParams) ([]Link, e
 		return nil, err
 	}
 	return items, nil
+}
+
+const resolveAndTrack = `-- name: ResolveAndTrack :one
+UPDATE links
+SET
+  access_count     = access_count + 1,
+  last_accessed_at = now()
+WHERE slug = $1
+  AND deleted_at IS NULL
+RETURNING
+  id,
+  original_url,
+  slug,
+  access_count,
+  created_at,
+  updated_at,
+  last_accessed_at,
+  deleted_at
+`
+
+func (q *Queries) ResolveAndTrack(ctx context.Context, slug string) (Link, error) {
+	row := q.db.QueryRow(ctx, resolveAndTrack, slug)
+	var i Link
+	err := row.Scan(
+		&i.ID,
+		&i.OriginalUrl,
+		&i.Slug,
+		&i.AccessCount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastAccessedAt,
+		&i.DeletedAt,
+	)
+	return i, err
 }
 
 const softDeleteLink = `-- name: SoftDeleteLink :exec

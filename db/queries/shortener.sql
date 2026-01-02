@@ -16,7 +16,7 @@ RETURNING
     last_accessed_at,
     deleted_at;
 
--- name: GetLink :one
+-- name: GetLinkBySLug :one
 SELECT
     id,
     original_url,
@@ -30,22 +30,22 @@ FROM links
 WHERE slug = $1
   AND deleted_at IS NULL;
 
-  -- name: ResolveAndTrack :one
-  UPDATE links
-  SET
-    access_count     = access_count + 1,
-    last_accessed_at = now()
-  WHERE slug = $1
-    AND deleted_at IS NULL
-  RETURNING
-    id,
-    original_url,
-    slug,
-    access_count,
-    created_at,
-    updated_at,
-    last_accessed_at,
-    deleted_at;
+-- name: ResolveAndTrack :one
+UPDATE links
+SET
+  access_count     = access_count + 1,
+  last_accessed_at = now()
+WHERE slug = $1
+  AND deleted_at IS NULL
+RETURNING
+  id,
+  original_url,
+  slug,
+  access_count,
+  created_at,
+  updated_at,
+  last_accessed_at,
+  deleted_at;
 
 -- name: ListLinks :many
 SELECT
