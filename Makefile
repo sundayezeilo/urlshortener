@@ -1,4 +1,4 @@
-.PHONY: migrate-create, clean-sqlc, sqlc, fmt, lint, test
+.PHONY: migrate-create, clean-sqlc, sqlc, fmt, lint, test, coverage
 
 migrate-create:
 	migrate create -ext sql -dir db/migrations $(name)  # Create migration file with make migrate-create name=<name>
