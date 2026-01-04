@@ -88,7 +88,7 @@ func (q *Queries) GetLinkBySLug(ctx context.Context, slug string) (Link, error) 
 	return i, err
 }
 
-const resolveAndTrack = `-- name: ResolveAndTrack :one
+const resolveAndTrackLink = `-- name: ResolveAndTrackLink :one
 UPDATE links
 SET
   access_count     = access_count + 1,
@@ -104,8 +104,8 @@ RETURNING
   last_accessed_at
 `
 
-func (q *Queries) ResolveAndTrack(ctx context.Context, slug string) (Link, error) {
-	row := q.db.QueryRow(ctx, resolveAndTrack, slug)
+func (q *Queries) ResolveAndTrackLink(ctx context.Context, slug string) (Link, error) {
+	row := q.db.QueryRow(ctx, resolveAndTrackLink, slug)
 	var i Link
 	err := row.Scan(
 		&i.ID,
