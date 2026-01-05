@@ -1,3 +1,7 @@
+// Package errx provides application error kinds that map cleanly to HTTP status codes.
+// While some kinds (Unauthorized, Forbidden) are HTTP-centric, they're included for
+// convenience since this is primarily a web application.
+
 package errx
 
 import (
