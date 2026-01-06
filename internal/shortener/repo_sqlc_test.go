@@ -24,31 +24,31 @@ type mockQueries struct {
 }
 
 func (m *mockQueries) CreateLink(ctx context.Context, params db.CreateLinkParams) (db.Link, error) {
-	if m.createLinkFunc != nil {
-		return m.createLinkFunc(ctx, params)
+	if m.createLinkFunc == nil {
+		return db.Link{}, nil
 	}
-	return db.Link{}, nil
+	return m.createLinkFunc(ctx, params)
 }
 
 func (m *mockQueries) GetLinkBySLug(ctx context.Context, slug string) (db.Link, error) {
-	if m.getLinkBySlugFunc != nil {
-		return m.getLinkBySlugFunc(ctx, slug)
+	if m.getLinkBySlugFunc == nil {
+		return db.Link{}, nil
 	}
-	return db.Link{}, nil
+	return m.getLinkBySlugFunc(ctx, slug)
 }
 
 func (m *mockQueries) ResolveAndTrackLink(ctx context.Context, slug string) (db.Link, error) {
-	if m.resolveAndTrackLinkFunc != nil {
-		return m.resolveAndTrackLinkFunc(ctx, slug)
+	if m.resolveAndTrackLinkFunc == nil {
+		return db.Link{}, nil
 	}
-	return db.Link{}, nil
+	return m.resolveAndTrackLinkFunc(ctx, slug)
 }
 
 func (m *mockQueries) DeleteLink(ctx context.Context, slug string) error {
-	if m.deleteLinkFunc != nil {
-		return m.deleteLinkFunc(ctx, slug)
+	if m.deleteLinkFunc == nil {
+		return nil
 	}
-	return nil
+	return m.deleteLinkFunc(ctx, slug)
 }
 
 // newTestRepository creates a repository with a mock querier for testing
