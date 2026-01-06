@@ -7,8 +7,8 @@ import "context"
 // creating, retrieving, updating, and deleting links, as well as
 // tracking access-related metadata.
 type Repository interface {
-	CreateLink(ctx context.Context, link Link) (Link, error)
-	GetLinkBySlug(ctx context.Context, slug string) (Link, error)
-	ResolveAndTrackLink(ctx context.Context, slug string) (Link, error)
-	DeleteLink(ctx context.Context, slug string) error
+	Create(ctx context.Context, link Link) (Link, error)
+	GetBySlug(ctx context.Context, slug string) (Link, error)
+	ResolveAndTrack(ctx context.Context, slug string) (Link, error)
+	Delete(ctx context.Context, slug string) error
 }

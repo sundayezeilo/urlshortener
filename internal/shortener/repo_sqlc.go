@@ -78,7 +78,7 @@ func mapRepoError(op string, err error) error {
 	}
 }
 
-func (r *repo) CreateLink(ctx context.Context, link Link) (Link, error) {
+func (r *repo) Create(ctx context.Context, link Link) (Link, error) {
 	const op = "shortener.repo.Create"
 	row, err := r.q.CreateLink(ctx, db.CreateLinkParams{
 		ID:          link.ID,
@@ -91,8 +91,8 @@ func (r *repo) CreateLink(ctx context.Context, link Link) (Link, error) {
 	return toDomainLink(row)
 }
 
-func (r *repo) GetLinkBySlug(ctx context.Context, slug string) (Link, error) {
-	const op = "shortener.repo.GetByLinkSlug"
+func (r *repo) GetBySlug(ctx context.Context, slug string) (Link, error) {
+	const op = "shortener.repo.GetBySlug"
 
 	row, err := r.q.GetLinkBySLug(ctx, slug)
 	if err != nil {
@@ -101,8 +101,9 @@ func (r *repo) GetLinkBySlug(ctx context.Context, slug string) (Link, error) {
 	return toDomainLink(row)
 }
 
-func (r *repo) ResolveAndTrackLink(ctx context.Context, slug string) (Link, error) {
-	const op = "shortener.repo.ResolveAndTrackLink"
+func (r *repo) ResolveAndTrack(ctx context.Context, slug string) (Link, error) {
+	const op = "shortener.repo.ResolveAndTrack"
+
 	row, err := r.q.ResolveAndTrackLink(ctx, slug)
 	if err != nil {
 		return Link{}, mapRepoError(op, err)
@@ -110,8 +111,8 @@ func (r *repo) ResolveAndTrackLink(ctx context.Context, slug string) (Link, erro
 	return toDomainLink(row)
 }
 
-func (r *repo) DeleteLink(ctx context.Context, slug string) error {
-	const op = "shortener.repo.DeleteLink"
+func (r *repo) Delete(ctx context.Context, slug string) error {
+	const op = "shortener.repo.Delete"
 	err := r.q.DeleteLink(ctx, slug)
 	return mapRepoError(op, err)
 }

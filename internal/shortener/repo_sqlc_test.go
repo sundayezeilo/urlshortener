@@ -295,8 +295,8 @@ func TestMapRepoError(t *testing.T) {
 	})
 }
 
-// TestRepoCreateLink tests the CreateLink method
-func TestRepoCreateLink(t *testing.T) {
+// TestRepoCreate tests the Create method
+func TestRepoCreate(t *testing.T) {
 	t.Run("creates link successfully", func(t *testing.T) {
 		dbLink := makeTestDBLink()
 		mock := &mockQueries{
@@ -314,13 +314,13 @@ func TestRepoCreateLink(t *testing.T) {
 		r := newTestRepository(mock)
 		link := makeTestLink()
 
-		got, err := r.CreateLink(context.Background(), link)
+		got, err := r.Create(context.Background(), link)
 		if err != nil {
-			t.Fatalf("CreateLink() unexpected error: %v", err)
+			t.Fatalf("Create() unexpected error: %v", err)
 		}
 
 		if got.Slug != dbLink.Slug {
-			t.Errorf("CreateLink() Slug = %q, want %q", got.Slug, dbLink.Slug)
+			t.Errorf("Create() Slug = %q, want %q", got.Slug, dbLink.Slug)
 		}
 	})
 
@@ -339,9 +339,9 @@ func TestRepoCreateLink(t *testing.T) {
 		r := newTestRepository(mock)
 		link := makeTestLink()
 
-		_, err := r.CreateLink(context.Background(), link)
+		_, err := r.Create(context.Background(), link)
 		if err == nil {
-			t.Fatal("CreateLink() expected error, got nil")
+			t.Fatal("Create() expected error, got nil")
 		}
 
 		if errx.KindOf(err) != errx.Conflict {
@@ -362,9 +362,9 @@ func TestRepoCreateLink(t *testing.T) {
 		r := newTestRepository(mock)
 		link := makeTestLink()
 
-		_, err := r.CreateLink(context.Background(), link)
+		_, err := r.Create(context.Background(), link)
 		if err == nil {
-			t.Fatal("CreateLink() expected error, got nil")
+			t.Fatal("Create() expected error, got nil")
 		}
 
 		if errx.KindOf(err) != errx.Unavailable {
@@ -390,15 +390,15 @@ func TestRepoCreateLink(t *testing.T) {
 		r := newTestRepository(mock)
 		link := makeTestLink()
 
-		_, err := r.CreateLink(context.Background(), link)
+		_, err := r.Create(context.Background(), link)
 		if err == nil {
-			t.Fatal("CreateLink() expected error from toDomainLink, got nil")
+			t.Fatal("Create() expected error from toDomainLink, got nil")
 		}
 	})
 }
 
-// TestRepoGetLinkBySlug tests the GetByLinkSlug method
-func TestRepoGetLinkBySlug(t *testing.T) {
+// TestRepoGetBySlug tests the GetBySlug method
+func TestRepoGetBySlug(t *testing.T) {
 	t.Run("retrieves link successfully", func(t *testing.T) {
 		dbLink := makeTestDBLink()
 		mock := &mockQueries{
@@ -412,13 +412,13 @@ func TestRepoGetLinkBySlug(t *testing.T) {
 
 		r := newTestRepository(mock)
 
-		got, err := r.GetLinkBySlug(context.Background(), "test-slug")
+		got, err := r.GetBySlug(context.Background(), "test-slug")
 		if err != nil {
-			t.Fatalf("GetLinkBySlug() unexpected error: %v", err)
+			t.Fatalf("GetBySlug() unexpected error: %v", err)
 		}
 
 		if got.Slug != dbLink.Slug {
-			t.Errorf("GetLinkBySlug() Slug = %q, want %q", got.Slug, dbLink.Slug)
+			t.Errorf("GetBySlug() Slug = %q, want %q", got.Slug, dbLink.Slug)
 		}
 	})
 
@@ -431,16 +431,16 @@ func TestRepoGetLinkBySlug(t *testing.T) {
 
 		r := newTestRepository(mock)
 
-		_, err := r.GetLinkBySlug(context.Background(), "nonexistent")
+		_, err := r.GetBySlug(context.Background(), "nonexistent")
 		if err == nil {
-			t.Fatal("GetByLinkSlug() expected error, got nil")
+			t.Fatal("GetBySlug() expected error, got nil")
 		}
 
 		if errx.KindOf(err) != errx.NotFound {
 			t.Errorf("KindOf(err) = %v, want %v", errx.KindOf(err), errx.NotFound)
 		}
-		if errx.OpOf(err) != "shortener.repo.GetByLinkSlug" {
-			t.Errorf("OpOf(err) = %q, want %q", errx.OpOf(err), "shortener.repo.GetByLinkSlug")
+		if errx.OpOf(err) != "shortener.repo.GetBySlug" {
+			t.Errorf("OpOf(err) = %q, want %q", errx.OpOf(err), "shortener.repo.GetBySlug")
 		}
 	})
 
@@ -453,9 +453,9 @@ func TestRepoGetLinkBySlug(t *testing.T) {
 
 		r := newTestRepository(mock)
 
-		_, err := r.GetLinkBySlug(context.Background(), "test-slug")
+		_, err := r.GetBySlug(context.Background(), "test-slug")
 		if err == nil {
-			t.Fatal("GetByLinkSlug() expected error, got nil")
+			t.Fatal("GetBySlug() expected error, got nil")
 		}
 
 		if errx.KindOf(err) != errx.Unavailable {
@@ -464,8 +464,8 @@ func TestRepoGetLinkBySlug(t *testing.T) {
 	})
 }
 
-// TestRepoResolveAndTrackLink tests the ResolveAndTrack method
-func TestRepoResolveAndTrackLink(t *testing.T) {
+// TestRepoResolveAndTrack tests the ResolveAndTrack method
+func TestRepoResolveAndTrack(t *testing.T) {
 	t.Run("resolves and tracks link successfully", func(t *testing.T) {
 		now := time.Now()
 		dbLink := db.Link{
@@ -489,9 +489,9 @@ func TestRepoResolveAndTrackLink(t *testing.T) {
 
 		r := newTestRepository(mock)
 
-		got, err := r.ResolveAndTrackLink(context.Background(), "test-slug")
+		got, err := r.ResolveAndTrack(context.Background(), "test-slug")
 		if err != nil {
-			t.Fatalf("ResolveAndTrackLink() unexpected error: %v", err)
+			t.Fatalf("ResolveAndTrack() unexpected error: %v", err)
 		}
 
 		if got.AccessCount != 1 {
@@ -511,15 +511,15 @@ func TestRepoResolveAndTrackLink(t *testing.T) {
 
 		r := newTestRepository(mock)
 
-		_, err := r.ResolveAndTrackLink(context.Background(), "nonexistent")
+		_, err := r.ResolveAndTrack(context.Background(), "nonexistent")
 		if err == nil {
-			t.Fatal("ResolveAndTrackLink() expected error, got nil")
+			t.Fatal("ResolveAndTrack() expected error, got nil")
 		}
 
 		if errx.KindOf(err) != errx.NotFound {
 			t.Errorf("KindOf(err) = %v, want %v", errx.KindOf(err), errx.NotFound)
 		}
-		if errx.OpOf(err) != "shortener.repo.ResolveAndTrackLink" {
+		if errx.OpOf(err) != "shortener.repo.ResolveAndTrack" {
 			t.Errorf("OpOf(err) = %q, want %q", errx.OpOf(err), "shortener.repo.ResolveAndTrack")
 		}
 	})
@@ -533,9 +533,9 @@ func TestRepoResolveAndTrackLink(t *testing.T) {
 
 		r := newTestRepository(mock)
 
-		_, err := r.ResolveAndTrackLink(context.Background(), "test-slug")
+		_, err := r.ResolveAndTrack(context.Background(), "test-slug")
 		if err == nil {
-			t.Fatal("ResolveAndTrackLink() expected error, got nil")
+			t.Fatal("ResolveAndTrack() expected error, got nil")
 		}
 
 		if errx.KindOf(err) != errx.Unavailable {
@@ -544,8 +544,8 @@ func TestRepoResolveAndTrackLink(t *testing.T) {
 	})
 }
 
-// TestRepoDeleteLink tests the DeleteLink method
-func TestRepoDeleteLink(t *testing.T) {
+// TestRepoDelete tests the Delete method
+func TestRepoDelete(t *testing.T) {
 	t.Run("deletes link successfully", func(t *testing.T) {
 		mock := &mockQueries{
 			deleteLinkFunc: func(ctx context.Context, slug string) error {
@@ -558,9 +558,9 @@ func TestRepoDeleteLink(t *testing.T) {
 
 		r := newTestRepository(mock)
 
-		err := r.DeleteLink(context.Background(), "test-slug")
+		err := r.Delete(context.Background(), "test-slug")
 		if err != nil {
-			t.Fatalf("DeleteLink() unexpected error: %v", err)
+			t.Fatalf("Delete() unexpected error: %v", err)
 		}
 	})
 
@@ -573,16 +573,16 @@ func TestRepoDeleteLink(t *testing.T) {
 
 		r := newTestRepository(mock)
 
-		err := r.DeleteLink(context.Background(), "nonexistent")
+		err := r.Delete(context.Background(), "nonexistent")
 		if err == nil {
-			t.Fatal("DeleteLink() expected error, got nil")
+			t.Fatal("Delete() expected error, got nil")
 		}
 
 		if errx.KindOf(err) != errx.NotFound {
 			t.Errorf("KindOf(err) = %v, want %v", errx.KindOf(err), errx.NotFound)
 		}
-		if errx.OpOf(err) != "shortener.repo.DeleteLink" {
-			t.Errorf("OpOf(err) = %q, want %q", errx.OpOf(err), "shortener.repo.DeleteLink")
+		if errx.OpOf(err) != "shortener.repo.Delete" {
+			t.Errorf("OpOf(err) = %q, want %q", errx.OpOf(err), "shortener.repo.Delete")
 		}
 	})
 
@@ -595,9 +595,9 @@ func TestRepoDeleteLink(t *testing.T) {
 
 		r := newTestRepository(mock)
 
-		err := r.DeleteLink(context.Background(), "test-slug")
+		err := r.Delete(context.Background(), "test-slug")
 		if err == nil {
-			t.Fatal("DeleteLink() expected error, got nil")
+			t.Fatal("Delete() expected error, got nil")
 		}
 
 		if errx.KindOf(err) != errx.Unavailable {
