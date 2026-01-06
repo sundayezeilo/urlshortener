@@ -92,7 +92,7 @@ func (r *repo) CreateLink(ctx context.Context, link Link) (Link, error) {
 }
 
 func (r *repo) GetLinkBySlug(ctx context.Context, slug string) (Link, error) {
-	const op = "shortener.repo.GetBySlug"
+	const op = "shortener.repo.GetByLinkSlug"
 
 	row, err := r.q.GetLinkBySLug(ctx, slug)
 	if err != nil {
@@ -102,7 +102,7 @@ func (r *repo) GetLinkBySlug(ctx context.Context, slug string) (Link, error) {
 }
 
 func (r *repo) ResolveAndTrackLink(ctx context.Context, slug string) (Link, error) {
-	const op = "shortener.repo.ResolveAndTrack"
+	const op = "shortener.repo.ResolveAndTrackLink"
 	row, err := r.q.ResolveAndTrackLink(ctx, slug)
 	if err != nil {
 		return Link{}, mapRepoError(op, err)
