@@ -19,6 +19,7 @@ const (
 	Unauthorized
 	Forbidden
 	Unavailable
+	Internal
 )
 
 type Error struct {

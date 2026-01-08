@@ -6,14 +6,16 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/sundayezeilo/urlshortener/internal/db/sqlc"
 	"github.com/sundayezeilo/urlshortener/internal/errx"
+	"github.com/sundayezeilo/urlshortener/internal/idgen"
 )
 
-// querier abstracts database operations - allows testing with mocks
+// querier is an internal interface that abstracts *db.Queries
 type querier interface {
 	CreateLink(ctx context.Context, arg db.CreateLinkParams) (db.Link, error)
 	GetLinkBySLug(ctx context.Context, slug string) (db.Link, error)
@@ -22,11 +24,30 @@ type querier interface {
 }
 
 type repo struct {
-	q querier
+	q   querier
+	ids idgen.Generator
 }
 
-func NewRepository(q querier) Repository {
-	return &repo{q: q}
+// RepositoryConfig holds configuration for the repository
+type RepositoryConfig struct {
+	IDGenerator idgen.Generator
+}
+
+// NewRepository creates a new Repository implementation
+func NewRepository(q querier, config *RepositoryConfig) Repository {
+	if config == nil {
+		config = &RepositoryConfig{}
+	}
+
+	// Default: UUID v7 (good for DB locality). Retry once by default inside idgen.NewV7.
+	if config.IDGenerator == nil {
+		config.IDGenerator = idgen.NewV7(idgen.WithRetries(1))
+	}
+
+	return &repo{
+		q:   q,
+		ids: config.IDGenerator,
+	}
 }
 
 func mustTime(ts pgtype.Timestamptz, field string) (time.Time, error) {
@@ -80,6 +101,17 @@ func mapRepoError(op string, err error) error {
 
 func (r *repo) Create(ctx context.Context, link Link) (Link, error) {
 	const op = "shortener.repo.Create"
+
+	// Generate ID if not provided
+	if link.ID == uuid.Nil {
+		id, err := r.ids.Generate()
+		if err != nil {
+			// idgen error is not a pgx error; classify as Unavailable
+			return Link{}, errx.E(op, errx.Unavailable, err)
+		}
+		link.ID = id
+	}
+
 	row, err := r.q.CreateLink(ctx, db.CreateLinkParams{
 		ID:          link.ID,
 		OriginalUrl: link.OriginalURL,
@@ -88,6 +120,7 @@ func (r *repo) Create(ctx context.Context, link Link) (Link, error) {
 	if err != nil {
 		return Link{}, mapRepoError(op, err)
 	}
+
 	return toDomainLink(row)
 }
 
@@ -113,6 +146,8 @@ func (r *repo) ResolveAndTrack(ctx context.Context, slug string) (Link, error) {
 
 func (r *repo) Delete(ctx context.Context, slug string) error {
 	const op = "shortener.repo.Delete"
-	err := r.q.DeleteLink(ctx, slug)
-	return mapRepoError(op, err)
+	if err := r.q.DeleteLink(ctx, slug); err != nil {
+		return mapRepoError(op, err)
+	}
+	return nil
 }

@@ -1,4 +1,4 @@
-.PHONY: help migrate-create clean-sqlc sqlc fmt lint test t clean coverage coverage-view coverage-func
+.PHONY: help migrate-create clean-sqlc sqlc fmt lint test t clean coverage coverage-view coverage-func, tidy
 
 COVERAGE_OUT := coverage.out
 COVERAGE_HTML := coverage.html
@@ -8,10 +8,11 @@ COVER_EXCLUDE := /internal/db/sqlc
 
 help:
 	@echo "Available targets:"
-	@echo "  make test            - Run all tests"
+	@echo "  make test             - Run all tests"
 	@echo "  make coverage         - Generate coverage report"
 	@echo "  make coverage-view    - Open coverage in browser"
 	@echo "  make clean            - Remove coverage files"
+	@echo "  make tidy             - Run go mod tidy"
 
 migrate-create:
 	@migrate create -ext sql -dir db/migrations $(name)
@@ -56,3 +57,6 @@ coverage-func: clean
 		-covermode=atomic \
 		-coverpkg=$$(echo $$PKGS | tr ' ' ',')
 	@go tool cover -func=$(COVERAGE_OUT)
+
+tidy:
+	@go mod tidy
