@@ -27,7 +27,7 @@ func TestV4_Generate(t *testing.T) {
 		gen := NewV4()
 
 		seen := make(map[uuid.UUID]struct{}, 50)
-		for i := 0; i < 50; i++ {
+		for range 50 {
 			id, err := gen.Generate()
 			if err != nil {
 				t.Fatalf("Generate() unexpected error: %v", err)
