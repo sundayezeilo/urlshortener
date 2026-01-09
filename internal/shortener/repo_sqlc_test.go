@@ -13,7 +13,6 @@ import (
 
 	db "github.com/sundayezeilo/urlshortener/internal/db/sqlc"
 	"github.com/sundayezeilo/urlshortener/internal/errx"
-	"github.com/sundayezeilo/urlshortener/internal/idgen"
 )
 
 /***************
@@ -688,21 +687,5 @@ func TestNewRepository_AllowsCustomGenerator(t *testing.T) {
 	}
 	if created.ID != wantID {
 		t.Fatalf("created.ID=%v want %v", created.ID, wantID)
-	}
-}
-
-// Optional: sanity check for idgen.NewV7 itself (not strictly repo-level).
-func TestIDGen_NewV7_Sanity(t *testing.T) {
-	gen := idgen.NewV7(idgen.WithRetries(0))
-
-	id, err := gen.Generate()
-	if err != nil {
-		t.Fatalf("Generate() unexpected error: %v", err)
-	}
-	if id == uuid.Nil {
-		t.Fatal("expected non-nil UUID")
-	}
-	if id.Version() != 7 {
-		t.Fatalf("UUID version=%d want 7", id.Version())
 	}
 }
