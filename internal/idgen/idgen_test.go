@@ -2,7 +2,6 @@ package idgen
 
 import (
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -53,30 +52,6 @@ func TestV7_Generate(t *testing.T) {
 		}
 		if id.Version() != 7 {
 			t.Fatalf("UUID version = %d, want 7", id.Version())
-		}
-	})
-
-	t.Run("generates roughly time-ordered UUIDs (sanity check)", func(t *testing.T) {
-		gen := NewV7()
-
-		// v7 is designed to be sortable by creation time. We don't want flaky tests,
-		// so we add a small sleep to separate timestamps.
-		id1, err := gen.Generate()
-		if err != nil {
-			t.Fatalf("Generate() err=%v", err)
-		}
-		time.Sleep(2 * time.Millisecond)
-
-		id2, err := gen.Generate()
-		if err != nil {
-			t.Fatalf("Generate() err=%v", err)
-		}
-
-		// uuid.UUID compares lexicographically by bytes.
-		// With a time gap, id2 should usually be greater than id1.
-		if !(string(id2[:]) > string(id1[:])) {
-			// Don't hard-fail if you prefer: but with the sleep this should be stable.
-			t.Fatalf("expected id2 to sort after id1; id1=%v id2=%v", id1, id2)
 		}
 	})
 

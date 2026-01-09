@@ -106,7 +106,6 @@ func (r *repo) Create(ctx context.Context, link Link) (Link, error) {
 	if link.ID == uuid.Nil {
 		id, err := r.ids.Generate()
 		if err != nil {
-			// idgen error is not a pgx error; classify as Unavailable
 			return Link{}, errx.E(op, errx.Unavailable, err)
 		}
 		link.ID = id
