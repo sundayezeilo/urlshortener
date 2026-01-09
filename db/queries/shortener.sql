@@ -27,7 +27,7 @@ SELECT
 FROM links
 WHERE slug = $1;
 
--- name: ResolveAndTrack :one
+-- name: ResolveAndTrackLink :one
 UPDATE links
 SET
   access_count     = access_count + 1,

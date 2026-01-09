@@ -1,7 +1,7 @@
 CREATE TABLE links (
     id               UUID PRIMARY KEY,
     original_url     TEXT NOT NULL,
-    slug TEXT NOT NULL UNIQUE CHECK (char_length(slug) BETWEEN 1 AND 32),
+    slug TEXT NOT NULL UNIQUE CHECK (char_length(slug) BETWEEN 7 AND 64),
     access_count     BIGINT NOT NULL DEFAULT 0,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
