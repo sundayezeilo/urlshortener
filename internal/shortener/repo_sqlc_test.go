@@ -427,8 +427,8 @@ func TestRepoCreate(t *testing.T) {
 		if err == nil {
 			t.Fatal("Create() expected error, got nil")
 		}
-		if errx.KindOf(err) != errx.Unavailable {
-			t.Errorf("KindOf(err)=%v want %v", errx.KindOf(err), errx.Unavailable)
+		if errx.KindOf(err) != errx.Internal {
+			t.Errorf("KindOf(err)=%v want %v", errx.KindOf(err), errx.Internal)
 		}
 		if errx.OpOf(err) != "shortener.repo.Create" {
 			t.Errorf("OpOf(err)=%q want %q", errx.OpOf(err), "shortener.repo.Create")
@@ -462,12 +462,13 @@ func TestRepoCreate(t *testing.T) {
 func TestRepoGetBySlug(t *testing.T) {
 	t.Run("retrieves link successfully", func(t *testing.T) {
 		now := time.Now()
+		testSlug := "test-slug"
 		dbLink := makeTestDBLink(now)
 
 		mock := &mockQueries{
 			getLinkBySlugFunc: func(_ context.Context, slug string) (db.Link, error) {
-				if slug != "test-slug" {
-					t.Errorf("slug=%q want %q", slug, "test-slug")
+				if slug != testSlug {
+					t.Errorf("slug=%q want %q", slug, testSlug)
 				}
 				return dbLink, nil
 			},
@@ -475,7 +476,7 @@ func TestRepoGetBySlug(t *testing.T) {
 
 		r := NewRepository(mock, &RepositoryConfig{IDGenerator: &stubIDGen{id: makeUUIDv7Deterministic()}})
 
-		got, err := r.GetBySlug(context.Background(), "test-slug")
+		got, err := r.GetBySlug(context.Background(), testSlug)
 		if err != nil {
 			t.Fatalf("GetBySlug() unexpected error: %v", err)
 		}
@@ -509,6 +510,7 @@ func TestRepoGetBySlug(t *testing.T) {
 func TestRepoResolveAndTrack(t *testing.T) {
 	t.Run("resolves and tracks successfully", func(t *testing.T) {
 		now := time.Now()
+		testSlug := "test-slug"
 		dbLink := db.Link{
 			ID:             uuid.New(),
 			OriginalUrl:    "https://example.com",
@@ -521,8 +523,8 @@ func TestRepoResolveAndTrack(t *testing.T) {
 
 		mock := &mockQueries{
 			resolveAndTrackFunc: func(_ context.Context, slug string) (db.Link, error) {
-				if slug != "test-slug" {
-					t.Errorf("slug=%q want %q", slug, "test-slug")
+				if slug != testSlug {
+					t.Errorf("slug=%q want %q", slug, testSlug)
 				}
 				return dbLink, nil
 			},
@@ -530,7 +532,7 @@ func TestRepoResolveAndTrack(t *testing.T) {
 
 		r := NewRepository(mock, &RepositoryConfig{IDGenerator: &stubIDGen{id: makeUUIDv7Deterministic()}})
 
-		got, err := r.ResolveAndTrack(context.Background(), "test-slug")
+		got, err := r.ResolveAndTrack(context.Background(), testSlug)
 		if err != nil {
 			t.Fatalf("ResolveAndTrack() unexpected error: %v", err)
 		}
@@ -566,10 +568,11 @@ func TestRepoResolveAndTrack(t *testing.T) {
 
 func TestRepoDelete(t *testing.T) {
 	t.Run("deletes successfully", func(t *testing.T) {
+		testSlug := "test-slug"
 		mock := &mockQueries{
 			deleteLinkFunc: func(_ context.Context, slug string) error {
-				if slug != "test-slug" {
-					t.Errorf("slug=%q want %q", slug, "test-slug")
+				if slug != testSlug {
+					t.Errorf("slug=%q want %q", slug, testSlug)
 				}
 				return nil
 			},

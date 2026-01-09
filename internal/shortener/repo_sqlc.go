@@ -106,7 +106,7 @@ func (r *repo) Create(ctx context.Context, link Link) (Link, error) {
 	if link.ID == uuid.Nil {
 		id, err := r.ids.Generate()
 		if err != nil {
-			return Link{}, errx.E(op, errx.Unavailable, err)
+			return Link{}, errx.E(op, errx.Internal, err)
 		}
 		link.ID = id
 	}
