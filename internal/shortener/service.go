@@ -2,30 +2,23 @@ package shortener
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"net/url"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/sundayezeilo/urlshortener/internal/errx"
+	"github.com/sundayezeilo/urlshortener/sluggen"
 )
 
 const (
 	DefaultSlugLength = 7
 	MaxSlugLength     = 64
 	MinSlugLength     = 3
+	MaxURLLength      = 2048
 	MaxRetries        = 3
 )
 
-const base62Chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-
-// SlugGenerator defines the interface for slug generation
-type SlugGenerator interface {
-	Generate(length int) (string, error)
-}
-
-// Service defines the business logic operations for URL shortening
+// Service defines the business logic operations for URL shortening.
 type Service interface {
 	Create(ctx context.Context, originalURL string, customSlug string) (Link, error)
 	GetBySlug(ctx context.Context, slug string) (Link, error)
@@ -33,30 +26,32 @@ type Service interface {
 	Delete(ctx context.Context, slug string) error
 }
 
-// service implements the Service interface
+// service implements the Service interface.
 type service struct {
 	repo          Repository
-	slugGenerator SlugGenerator
+	slugGenerator sluggen.Generator
 	slugLength    int
 }
 
-// ServiceConfig holds configuration for the service
+// ServiceConfig holds configuration for the service.
 type ServiceConfig struct {
-	SlugGenerator SlugGenerator
+	SlugGenerator sluggen.Generator
 	SlugLength    int
 }
 
-// NewService creates a new service instance
+// NewService creates a new service instance.
 func NewService(repo Repository, config *ServiceConfig) Service {
 	if config == nil {
 		config = &ServiceConfig{}
 	}
 
 	// Use default slug generator if not provided
-	if config.SlugGenerator == nil {
-		config.SlugGenerator = &Base62Generator{}
+	slugGen := config.SlugGenerator
+	if slugGen == nil {
+		slugGen = sluggen.NewBase62()
 	}
 
+	// Validate and set slug length
 	slugLength := config.SlugLength
 	if slugLength < MinSlugLength || slugLength > MaxSlugLength {
 		slugLength = DefaultSlugLength
@@ -64,39 +59,38 @@ func NewService(repo Repository, config *ServiceConfig) Service {
 
 	return &service{
 		repo:          repo,
-		slugGenerator: config.SlugGenerator,
+		slugGenerator: slugGen,
 		slugLength:    slugLength,
 	}
 }
 
-// Create creates a new short link with optional custom slug
+// Create creates a new short link with optional custom slug.
 func (s *service) Create(ctx context.Context, originalURL string, customSlug string) (Link, error) {
 	const op = "shortener.service.Create"
-	var err error
 
-	if err = validateURL(originalURL); err != nil {
+	// Validate URL
+	if err := validateURL(originalURL); err != nil {
 		return Link{}, errx.E(op, errx.Invalid, err)
 	}
 
+	// Determine slug
 	slug := customSlug
 	if slug != "" {
-		if err := validateCustomSlug(slug); err != nil {
+		// Validate custom slug
+		if err := validateSlug(slug); err != nil {
 			return Link{}, errx.E(op, errx.Invalid, err)
 		}
 	} else {
-		slug, err = s.generateUniqueSlug(ctx, op)
+		// Generate unique slug
+		var err error
+		slug, err = s.generateUniqueSlug(ctx)
 		if err != nil {
-			return Link{}, err
+			return Link{}, errx.E(op, errx.KindOf(err), err)
 		}
 	}
 
-	id, err := uuid.NewV7()
-	if err != nil {
-		return Link{}, errx.E(op, errx.Unavailable, err)
-	}
-
+	// Create link (ID generation happens in repository)
 	link := Link{
-		ID:          id,
 		OriginalURL: originalURL,
 		Slug:        slug,
 	}
@@ -109,16 +103,12 @@ func (s *service) Create(ctx context.Context, originalURL string, customSlug str
 	return created, nil
 }
 
-// GetBySlug retrieves a link by its slug
+// GetBySlug retrieves a link by its slug.
 func (s *service) GetBySlug(ctx context.Context, slug string) (Link, error) {
 	const op = "shortener.service.GetBySlug"
 
-	if slug == "" {
-		return Link{}, errx.E(op, errx.Invalid, errors.New("slug cannot be empty"))
-	}
-
-	if len(slug) < MinSlugLength || len(slug) > MaxSlugLength {
-		return Link{}, errx.E(op, errx.Invalid, errors.New("slug cannot be empty"))
+	if err := validateSlugNotEmpty(slug); err != nil {
+		return Link{}, errx.E(op, errx.Invalid, err)
 	}
 
 	link, err := s.repo.GetBySlug(ctx, slug)
@@ -129,12 +119,12 @@ func (s *service) GetBySlug(ctx context.Context, slug string) (Link, error) {
 	return link, nil
 }
 
-// Resolve resolves a slug to its original URL and tracks the access
+// Resolve resolves a slug to its original URL and tracks the access.
 func (s *service) Resolve(ctx context.Context, slug string) (string, error) {
 	const op = "shortener.service.Resolve"
 
-	if slug == "" {
-		return "", errx.E(op, errx.Invalid, errors.New("slug cannot be empty"))
+	if err := validateSlugNotEmpty(slug); err != nil {
+		return "", errx.E(op, errx.Invalid, err)
 	}
 
 	link, err := s.repo.ResolveAndTrack(ctx, slug)
@@ -145,49 +135,53 @@ func (s *service) Resolve(ctx context.Context, slug string) (string, error) {
 	return link.OriginalURL, nil
 }
 
-// Delete removes a link by its slug
+// Delete removes a link by its slug.
 func (s *service) Delete(ctx context.Context, slug string) error {
 	const op = "shortener.service.Delete"
 
-	if slug == "" {
-		return errx.E(op, errx.Invalid, errors.New("slug cannot be empty"))
+	if err := validateSlugNotEmpty(slug); err != nil {
+		return errx.E(op, errx.Invalid, err)
 	}
 
-	err := s.repo.Delete(ctx, slug)
-	if err != nil {
+	if err := s.repo.Delete(ctx, slug); err != nil {
 		return errx.E(op, errx.KindOf(err), err)
 	}
 
 	return nil
 }
 
-// generateUniqueSlug generates a unique slug with retry logic
-func (s *service) generateUniqueSlug(ctx context.Context, op string) (string, error) {
+// generateUniqueSlug generates a unique slug with retry logic.
+func (s *service) generateUniqueSlug(ctx context.Context) (string, error) {
 	for attempt := 0; attempt < MaxRetries; attempt++ {
 		slug, err := s.slugGenerator.Generate(s.slugLength)
 		if err != nil {
-			return "", errx.E(op, errx.Unavailable, err)
+			return "", errx.E("sluggen.Generate", errx.Unavailable, err)
 		}
 
+		// Check if slug is available
 		_, err = s.repo.GetBySlug(ctx, slug)
 		if err != nil {
 			if errx.KindOf(err) == errx.NotFound {
+				// Slug is available
 				return slug, nil
 			}
-			return "", errx.E(op, errx.KindOf(err), err)
+			// Other error occurred (e.g., database unavailable)
+			return "", err
 		}
+		// Slug exists, retry with a new one
 	}
 
-	return "", errx.E(op, errx.Unavailable, errors.New("failed to generate unique slug after maximum retries"))
+	return "", errx.E("sluggen.Generate", errx.Unavailable,
+		errors.New("failed to generate unique slug after maximum retries"))
 }
 
-// validateURL validates that the URL is properly formatted
+// validateURL validates that the URL is properly formatted.
 func validateURL(rawURL string) error {
 	if rawURL == "" {
 		return errors.New("url cannot be empty")
 	}
 
-	if len(rawURL) > 2048 {
+	if len(rawURL) > MaxURLLength {
 		return errors.New("url too long (max 2048 characters)")
 	}
 
@@ -211,8 +205,8 @@ func validateURL(rawURL string) error {
 	return nil
 }
 
-// validateCustomSlug validates that the slug meets requirements
-func validateCustomSlug(slug string) error {
+// validateSlug validates that the slug meets all requirements.
+func validateSlug(slug string) error {
 	if slug == "" {
 		return errors.New("slug cannot be empty")
 	}
@@ -222,13 +216,7 @@ func validateCustomSlug(slug string) error {
 	}
 
 	if len(slug) > MaxSlugLength {
-		return errors.New("slug too long (maximum 50 characters)")
-	}
-
-	for _, char := range slug {
-		if !isValidSlugChar(char) {
-			return errors.New("slug contains invalid characters (only alphanumeric, dash, and underscore allowed)")
-		}
+		return errors.New("slug too long (maximum 64 characters)")
 	}
 
 	// Slug should not start or end with dash/underscore
@@ -237,34 +225,29 @@ func validateCustomSlug(slug string) error {
 		return errors.New("slug cannot start or end with dash or underscore")
 	}
 
+	// Check all characters are valid
+	for _, char := range slug {
+		if !isValidSlugChar(char) {
+			return errors.New("slug contains invalid characters (only alphanumeric, dash, and underscore allowed)")
+		}
+	}
+
 	return nil
 }
 
-// isValidSlugChar checks if a character is valid for a slug
+// validateSlugNotEmpty is a lighter validation for retrieval operations
+// where we only need to ensure the slug is not empty.
+func validateSlugNotEmpty(slug string) error {
+	if slug == "" {
+		return errors.New("slug cannot be empty")
+	}
+	return nil
+}
+
+// isValidSlugChar checks if a character is valid for a slug.
 func isValidSlugChar(c rune) bool {
 	return (c >= '0' && c <= '9') ||
 		(c >= 'A' && c <= 'Z') ||
 		(c >= 'a' && c <= 'z') ||
 		c == '-' || c == '_'
-}
-
-// Base62Generator implements SlugGenerator using base62 encoding
-type Base62Generator struct{}
-
-// Generate generates a random base62 string of the specified length
-func (g *Base62Generator) Generate(length int) (string, error) {
-	if length <= 0 {
-		return "", errors.New("length must be positive")
-	}
-
-	b := make([]byte, length)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-
-	for i := range b {
-		b[i] = base62Chars[int(b[i])%len(base62Chars)]
-	}
-
-	return string(b), nil
 }
