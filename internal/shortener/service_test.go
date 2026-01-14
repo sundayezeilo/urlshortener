@@ -15,7 +15,7 @@ import (
  * Mocks
  ***************/
 
-// mockRepository implements Repository for testing.
+// mockRepository implements Repository interface for testing.
 type mockRepository struct {
 	createFunc          func(ctx context.Context, link Link) (Link, error)
 	getBySlugFunc       func(ctx context.Context, slug string) (Link, error)
@@ -27,7 +27,6 @@ func (m *mockRepository) Create(ctx context.Context, link Link) (Link, error) {
 	if m.createFunc != nil {
 		return m.createFunc(ctx, link)
 	}
-	// Default: return with generated ID and timestamps
 	link.ID = uuid.New()
 	link.CreatedAt = time.Now()
 	link.UpdatedAt = time.Now()
@@ -55,24 +54,25 @@ func (m *mockRepository) Delete(ctx context.Context, slug string) error {
 	return nil
 }
 
-// mockSlugGenerator implements sluggen.Generator for testing.
+// mockSlugGenerator implements slug generator for testing.
 type mockSlugGenerator struct {
 	generateFunc func(length int) (string, error)
-	slugs        []string // Pre-defined slugs to return in sequence
+	slugs        []string
 	callCount    int
 }
 
 func (m *mockSlugGenerator) Generate(length int) (string, error) {
+	m.callCount++
+
 	if m.generateFunc != nil {
 		return m.generateFunc(length)
 	}
-
-	if m.slugs != nil && m.callCount < len(m.slugs) {
-		slug := m.slugs[m.callCount]
-		m.callCount++
-		return slug, nil
+	if m.slugs != nil {
+		idx := m.callCount - 1
+		if idx >= 0 && idx < len(m.slugs) {
+			return m.slugs[idx], nil
+		}
 	}
-
 	return "abc1234", nil
 }
 
@@ -84,7 +84,6 @@ func TestNewService(t *testing.T) {
 	t.Run("creates service with nil config", func(t *testing.T) {
 		repo := &mockRepository{}
 		svc := NewService(repo, nil)
-
 		if svc == nil {
 			t.Fatal("NewService() returned nil")
 		}
@@ -93,7 +92,6 @@ func TestNewService(t *testing.T) {
 	t.Run("creates service with empty config", func(t *testing.T) {
 		repo := &mockRepository{}
 		svc := NewService(repo, &ServiceConfig{})
-
 		if svc == nil {
 			t.Fatal("NewService() returned nil")
 		}
@@ -106,7 +104,6 @@ func TestNewService(t *testing.T) {
 			SlugGenerator: generator,
 			SlugLength:    10,
 		})
-
 		if svc == nil {
 			t.Fatal("NewService() returned nil")
 		}
@@ -114,12 +111,7 @@ func TestNewService(t *testing.T) {
 
 	t.Run("uses default slug length when below minimum", func(t *testing.T) {
 		repo := &mockRepository{}
-		// This is a behavioral test - we can't directly inspect slugLength,
-		// but the service should use DefaultSlugLength internally
-		svc := NewService(repo, &ServiceConfig{
-			SlugLength: 2, // Below MinSlugLength
-		})
-
+		svc := NewService(repo, &ServiceConfig{SlugLength: 2})
 		if svc == nil {
 			t.Fatal("NewService() returned nil")
 		}
@@ -127,12 +119,38 @@ func TestNewService(t *testing.T) {
 
 	t.Run("uses default slug length when above maximum", func(t *testing.T) {
 		repo := &mockRepository{}
-		svc := NewService(repo, &ServiceConfig{
-			SlugLength: 100, // Above MaxSlugLength
-		})
-
+		svc := NewService(repo, &ServiceConfig{SlugLength: 100})
 		if svc == nil {
 			t.Fatal("NewService() returned nil")
+		}
+	})
+
+	t.Run("respects SlugMaxRetries when provided", func(t *testing.T) {
+		gen := &mockSlugGenerator{slugs: []string{"a1"}}
+		createCalls := 0
+
+		svc := NewService(&mockRepository{
+			createFunc: func(ctx context.Context, link Link) (Link, error) {
+				createCalls++
+				return Link{}, errx.E("repo.Create", errx.Conflict, errors.New("duplicate"))
+			},
+		}, &ServiceConfig{
+			SlugGenerator:  gen,
+			SlugMaxRetries: 1,
+		})
+
+		_, err := svc.Create(context.Background(), CreateLinkRequest{OriginalURL: "https://example.com"})
+		if err == nil {
+			t.Fatal("Create() expected error, got nil")
+		}
+		if errx.KindOf(err) != errx.Unavailable {
+			t.Errorf("error kind = %v, want %v", errx.KindOf(err), errx.Unavailable)
+		}
+		if createCalls != 1 {
+			t.Errorf("Create called %d times, want 1", createCalls)
+		}
+		if gen.callCount != 1 {
+			t.Errorf("Generator called %d times, want 1", gen.callCount)
 		}
 	})
 }
@@ -158,7 +176,10 @@ func TestServiceCreate(t *testing.T) {
 			SlugGenerator: &mockSlugGenerator{},
 		})
 
-		result, err := svc.Create(context.Background(), "https://example.com", "my-slug")
+		result, err := svc.Create(context.Background(), CreateLinkRequest{
+			OriginalURL: "https://example.com",
+			CustomSlug:  "my-slug",
+		})
 		if err != nil {
 			t.Fatalf("Create() unexpected error: %v", err)
 		}
@@ -177,10 +198,6 @@ func TestServiceCreate(t *testing.T) {
 	t.Run("creates link with generated slug successfully", func(t *testing.T) {
 		var capturedLink Link
 		repo := &mockRepository{
-			getBySlugFunc: func(ctx context.Context, slug string) (Link, error) {
-				// Slug is available
-				return Link{}, errx.E("repo.GetBySlug", errx.NotFound, errors.New("not found"))
-			},
 			createFunc: func(ctx context.Context, link Link) (Link, error) {
 				capturedLink = link
 				link.ID = uuid.New()
@@ -199,7 +216,9 @@ func TestServiceCreate(t *testing.T) {
 			SlugLength: 7,
 		})
 
-		result, err := svc.Create(context.Background(), "https://example.com", "")
+		result, err := svc.Create(context.Background(), CreateLinkRequest{
+			OriginalURL: "https://example.com",
+		})
 		if err != nil {
 			t.Fatalf("Create() unexpected error: %v", err)
 		}
@@ -212,81 +231,105 @@ func TestServiceCreate(t *testing.T) {
 		}
 	})
 
-	t.Run("retries when generated slug already exists", func(t *testing.T) {
-		getBySlugCalls := 0
+	t.Run("retries on Conflict from repository Create and succeeds", func(t *testing.T) {
+		createCalls := 0
+		var capturedSlugs []string
+
 		repo := &mockRepository{
-			getBySlugFunc: func(ctx context.Context, slug string) (Link, error) {
-				getBySlugCalls++
-				if slug == "first" {
-					// First slug exists
-					return Link{Slug: "first", OriginalURL: "https://other.com"}, nil
+			createFunc: func(ctx context.Context, link Link) (Link, error) {
+				createCalls++
+				capturedSlugs = append(capturedSlugs, link.Slug)
+
+				// First attempt: collision
+				if createCalls == 1 {
+					return Link{}, errx.E("repo.Create", errx.Conflict, errors.New("duplicate slug"))
 				}
-				// Second slug is available
-				return Link{}, errx.E("repo.GetBySlug", errx.NotFound, errors.New("not found"))
+
+				// Second attempt: success
+				link.ID = uuid.New()
+				link.CreatedAt = time.Now()
+				link.UpdatedAt = time.Now()
+				return link, nil
 			},
 		}
 
-		generator := &mockSlugGenerator{
-			slugs: []string{"first", "second"},
-		}
+		gen := &mockSlugGenerator{slugs: []string{"first", "second"}}
 
 		svc := NewService(repo, &ServiceConfig{
-			SlugGenerator: generator,
+			SlugGenerator:  gen,
+			SlugLength:     6,
+			SlugMaxRetries: 3,
 		})
 
-		result, err := svc.Create(context.Background(), "https://example.com", "")
+		got, err := svc.Create(context.Background(), CreateLinkRequest{
+			OriginalURL: "https://example.com",
+		})
 		if err != nil {
 			t.Fatalf("Create() unexpected error: %v", err)
 		}
 
-		if result.Slug != "second" {
-			t.Errorf("Slug = %q, want %q", result.Slug, "second")
+		if got.Slug != "second" {
+			t.Errorf("Slug = %q, want %q", got.Slug, "second")
 		}
-		if getBySlugCalls != 2 {
-			t.Errorf("GetBySlug called %d times, want 2", getBySlugCalls)
+		if createCalls != 2 {
+			t.Errorf("Create called %d times, want 2", createCalls)
 		}
-		if generator.callCount != 2 {
-			t.Errorf("Generator called %d times, want 2", generator.callCount)
+		if gen.callCount != 2 {
+			t.Errorf("Generator called %d times, want 2", gen.callCount)
+		}
+		if len(capturedSlugs) != 2 || capturedSlugs[0] != "first" || capturedSlugs[1] != "second" {
+			t.Errorf("captured slugs = %#v, want [first second]", capturedSlugs)
 		}
 	})
 
-	t.Run("returns Unavailable after max retries on collision", func(t *testing.T) {
+	t.Run("returns Unavailable after exhausting retries on Conflict", func(t *testing.T) {
+		createCalls := 0
 		repo := &mockRepository{
-			getBySlugFunc: func(ctx context.Context, slug string) (Link, error) {
-				// All generated slugs already exist
-				return Link{Slug: slug}, nil
+			createFunc: func(ctx context.Context, link Link) (Link, error) {
+				createCalls++
+				return Link{}, errx.E("repo.Create", errx.Conflict, errors.New("duplicate slug"))
 			},
 		}
 
+		gen := &mockSlugGenerator{slugs: []string{"a1", "b2", "c3"}}
+
 		svc := NewService(repo, &ServiceConfig{
-			SlugGenerator: &mockSlugGenerator{
-				generateFunc: func(length int) (string, error) {
-					return "taken", nil
-				},
-			},
+			SlugGenerator:  gen,
+			SlugLength:     2,
+			SlugMaxRetries: 3,
 		})
 
-		_, err := svc.Create(context.Background(), "https://example.com", "")
+		_, err := svc.Create(context.Background(), CreateLinkRequest{
+			OriginalURL: "https://example.com",
+		})
 		if err == nil {
-			t.Fatal("Create() expected error after max retries, got nil")
+			t.Fatal("Create() expected error, got nil")
 		}
 
 		if errx.KindOf(err) != errx.Unavailable {
-			t.Errorf("error kind = %v, want %v", errx.KindOf(err), errx.Unavailable)
+			t.Errorf("KindOf(err) = %v, want %v", errx.KindOf(err), errx.Unavailable)
 		}
 		if errx.OpOf(err) != "shortener.service.Create" {
-			t.Errorf("error op = %q, want %q", errx.OpOf(err), "shortener.service.Create")
+			t.Errorf("OpOf(err) = %q, want %q", errx.OpOf(err), "shortener.service.Create")
+		}
+		if createCalls != 3 {
+			t.Errorf("Create called %d times, want 3", createCalls)
+		}
+		if gen.callCount != 3 {
+			t.Errorf("Generator called %d times, want 3", gen.callCount)
 		}
 	})
 
 	t.Run("validates URL - empty", func(t *testing.T) {
 		svc := NewService(&mockRepository{}, nil)
 
-		_, err := svc.Create(context.Background(), "", "valid-slug")
+		_, err := svc.Create(context.Background(), CreateLinkRequest{
+			OriginalURL: "",
+			CustomSlug:  "valid-slug",
+		})
 		if err == nil {
 			t.Fatal("Create() expected error for empty URL, got nil")
 		}
-
 		if errx.KindOf(err) != errx.Invalid {
 			t.Errorf("error kind = %v, want %v", errx.KindOf(err), errx.Invalid)
 		}
@@ -295,11 +338,13 @@ func TestServiceCreate(t *testing.T) {
 	t.Run("validates URL - no scheme", func(t *testing.T) {
 		svc := NewService(&mockRepository{}, nil)
 
-		_, err := svc.Create(context.Background(), "example.com", "valid-slug")
+		_, err := svc.Create(context.Background(), CreateLinkRequest{
+			OriginalURL: "example.com",
+			CustomSlug:  "valid-slug",
+		})
 		if err == nil {
 			t.Fatal("Create() expected error for URL without scheme, got nil")
 		}
-
 		if errx.KindOf(err) != errx.Invalid {
 			t.Errorf("error kind = %v, want %v", errx.KindOf(err), errx.Invalid)
 		}
@@ -308,11 +353,13 @@ func TestServiceCreate(t *testing.T) {
 	t.Run("validates URL - wrong scheme", func(t *testing.T) {
 		svc := NewService(&mockRepository{}, nil)
 
-		_, err := svc.Create(context.Background(), "ftp://example.com", "valid-slug")
+		_, err := svc.Create(context.Background(), CreateLinkRequest{
+			OriginalURL: "ftp://example.com",
+			CustomSlug:  "valid-slug",
+		})
 		if err == nil {
 			t.Fatal("Create() expected error for non-HTTP(S) URL, got nil")
 		}
-
 		if errx.KindOf(err) != errx.Invalid {
 			t.Errorf("error kind = %v, want %v", errx.KindOf(err), errx.Invalid)
 		}
@@ -321,11 +368,13 @@ func TestServiceCreate(t *testing.T) {
 	t.Run("validates URL - no host", func(t *testing.T) {
 		svc := NewService(&mockRepository{}, nil)
 
-		_, err := svc.Create(context.Background(), "https://", "valid-slug")
+		_, err := svc.Create(context.Background(), CreateLinkRequest{
+			OriginalURL: "https://",
+			CustomSlug:  "valid-slug",
+		})
 		if err == nil {
 			t.Fatal("Create() expected error for URL without host, got nil")
 		}
-
 		if errx.KindOf(err) != errx.Invalid {
 			t.Errorf("error kind = %v, want %v", errx.KindOf(err), errx.Invalid)
 		}
@@ -335,11 +384,13 @@ func TestServiceCreate(t *testing.T) {
 		svc := NewService(&mockRepository{}, nil)
 
 		longURL := "https://example.com/" + strings.Repeat("a", 2050)
-		_, err := svc.Create(context.Background(), longURL, "valid-slug")
+		_, err := svc.Create(context.Background(), CreateLinkRequest{
+			OriginalURL: longURL,
+			CustomSlug:  "valid-slug",
+		})
 		if err == nil {
 			t.Fatal("Create() expected error for too long URL, got nil")
 		}
-
 		if errx.KindOf(err) != errx.Invalid {
 			t.Errorf("error kind = %v, want %v", errx.KindOf(err), errx.Invalid)
 		}
@@ -348,11 +399,13 @@ func TestServiceCreate(t *testing.T) {
 	t.Run("validates custom slug - too short", func(t *testing.T) {
 		svc := NewService(&mockRepository{}, nil)
 
-		_, err := svc.Create(context.Background(), "https://example.com", "ab")
+		_, err := svc.Create(context.Background(), CreateLinkRequest{
+			OriginalURL: "https://example.com",
+			CustomSlug:  "ab",
+		})
 		if err == nil {
 			t.Fatal("Create() expected error for slug too short, got nil")
 		}
-
 		if errx.KindOf(err) != errx.Invalid {
 			t.Errorf("error kind = %v, want %v", errx.KindOf(err), errx.Invalid)
 		}
@@ -361,11 +414,13 @@ func TestServiceCreate(t *testing.T) {
 	t.Run("validates custom slug - too long", func(t *testing.T) {
 		svc := NewService(&mockRepository{}, nil)
 
-		_, err := svc.Create(context.Background(), "https://example.com", strings.Repeat("a", 65))
+		_, err := svc.Create(context.Background(), CreateLinkRequest{
+			OriginalURL: "https://example.com",
+			CustomSlug:  strings.Repeat("a", 65),
+		})
 		if err == nil {
 			t.Fatal("Create() expected error for slug too long, got nil")
 		}
-
 		if errx.KindOf(err) != errx.Invalid {
 			t.Errorf("error kind = %v, want %v", errx.KindOf(err), errx.Invalid)
 		}
@@ -374,11 +429,13 @@ func TestServiceCreate(t *testing.T) {
 	t.Run("validates custom slug - starts with dash", func(t *testing.T) {
 		svc := NewService(&mockRepository{}, nil)
 
-		_, err := svc.Create(context.Background(), "https://example.com", "-invalid")
+		_, err := svc.Create(context.Background(), CreateLinkRequest{
+			OriginalURL: "https://example.com",
+			CustomSlug:  "-invalid",
+		})
 		if err == nil {
 			t.Fatal("Create() expected error for slug starting with dash, got nil")
 		}
-
 		if errx.KindOf(err) != errx.Invalid {
 			t.Errorf("error kind = %v, want %v", errx.KindOf(err), errx.Invalid)
 		}
@@ -387,11 +444,13 @@ func TestServiceCreate(t *testing.T) {
 	t.Run("validates custom slug - ends with underscore", func(t *testing.T) {
 		svc := NewService(&mockRepository{}, nil)
 
-		_, err := svc.Create(context.Background(), "https://example.com", "invalid_")
+		_, err := svc.Create(context.Background(), CreateLinkRequest{
+			OriginalURL: "https://example.com",
+			CustomSlug:  "invalid_",
+		})
 		if err == nil {
 			t.Fatal("Create() expected error for slug ending with underscore, got nil")
 		}
-
 		if errx.KindOf(err) != errx.Invalid {
 			t.Errorf("error kind = %v, want %v", errx.KindOf(err), errx.Invalid)
 		}
@@ -409,9 +468,13 @@ func TestServiceCreate(t *testing.T) {
 		}
 
 		for _, slug := range invalidSlugs {
-			_, err := svc.Create(context.Background(), "https://example.com", slug)
+			_, err := svc.Create(context.Background(), CreateLinkRequest{
+				OriginalURL: "https://example.com",
+				CustomSlug:  slug,
+			})
 			if err == nil {
 				t.Errorf("Create() expected error for slug %q, got nil", slug)
+				continue
 			}
 			if errx.KindOf(err) != errx.Invalid {
 				t.Errorf("error kind = %v for slug %q, want %v", errx.KindOf(err), slug, errx.Invalid)
@@ -433,27 +496,31 @@ func TestServiceCreate(t *testing.T) {
 		}
 
 		for _, slug := range validSlugs {
-			_, err := svc.Create(context.Background(), "https://example.com", slug)
+			_, err := svc.Create(context.Background(), CreateLinkRequest{
+				OriginalURL: "https://example.com",
+				CustomSlug:  slug,
+			})
 			if err != nil {
 				t.Errorf("Create() unexpected error for valid slug %q: %v", slug, err)
 			}
 		}
 	})
 
-	t.Run("propagates Conflict error from repository", func(t *testing.T) {
+	t.Run("propagates Conflict error from repository for custom slug", func(t *testing.T) {
 		repo := &mockRepository{
 			createFunc: func(ctx context.Context, link Link) (Link, error) {
 				return Link{}, errx.E("repo.Create", errx.Conflict, errors.New("duplicate slug"))
 			},
 		}
-
 		svc := NewService(repo, nil)
 
-		_, err := svc.Create(context.Background(), "https://example.com", "existing")
+		_, err := svc.Create(context.Background(), CreateLinkRequest{
+			OriginalURL: "https://example.com",
+			CustomSlug:  "existing",
+		})
 		if err == nil {
 			t.Fatal("Create() expected error from repository, got nil")
 		}
-
 		if errx.KindOf(err) != errx.Conflict {
 			t.Errorf("error kind = %v, want %v", errx.KindOf(err), errx.Conflict)
 		}
@@ -465,14 +532,15 @@ func TestServiceCreate(t *testing.T) {
 				return Link{}, errx.E("repo.Create", errx.Unavailable, errors.New("db error"))
 			},
 		}
-
 		svc := NewService(repo, nil)
 
-		_, err := svc.Create(context.Background(), "https://example.com", "valid-slug")
+		_, err := svc.Create(context.Background(), CreateLinkRequest{
+			OriginalURL: "https://example.com",
+			CustomSlug:  "valid-slug",
+		})
 		if err == nil {
 			t.Fatal("Create() expected error from repository, got nil")
 		}
-
 		if errx.KindOf(err) != errx.Unavailable {
 			t.Errorf("error kind = %v, want %v", errx.KindOf(err), errx.Unavailable)
 		}
@@ -485,41 +553,39 @@ func TestServiceCreate(t *testing.T) {
 				return "", errors.New("entropy exhausted")
 			},
 		}
+		svc := NewService(repo, &ServiceConfig{SlugGenerator: generator})
 
-		svc := NewService(repo, &ServiceConfig{
-			SlugGenerator: generator,
+		_, err := svc.Create(context.Background(), CreateLinkRequest{
+			OriginalURL: "https://example.com",
+			CustomSlug:  "",
 		})
-
-		_, err := svc.Create(context.Background(), "https://example.com", "")
 		if err == nil {
 			t.Fatal("Create() expected error when generator fails, got nil")
 		}
-
 		if errx.KindOf(err) != errx.Unavailable {
 			t.Errorf("error kind = %v, want %v", errx.KindOf(err), errx.Unavailable)
 		}
 	})
 
-	t.Run("propagates error from GetBySlug during collision check", func(t *testing.T) {
+	t.Run("propagates non-Conflict error from repository during generation", func(t *testing.T) {
 		repo := &mockRepository{
-			getBySlugFunc: func(ctx context.Context, slug string) (Link, error) {
-				return Link{}, errx.E("repo.GetBySlug", errx.Unavailable, errors.New("db down"))
+			createFunc: func(ctx context.Context, link Link) (Link, error) {
+				return Link{}, errx.E("repo.Create", errx.Unavailable, errors.New("db down"))
 			},
 		}
-
 		svc := NewService(repo, &ServiceConfig{
 			SlugGenerator: &mockSlugGenerator{
-				generateFunc: func(length int) (string, error) {
-					return "abc123", nil
-				},
+				generateFunc: func(length int) (string, error) { return "abc123", nil },
 			},
 		})
 
-		_, err := svc.Create(context.Background(), "https://example.com", "")
+		_, err := svc.Create(context.Background(), CreateLinkRequest{
+			OriginalURL: "https://example.com",
+			CustomSlug:  "",
+		})
 		if err == nil {
-			t.Fatal("Create() expected error from GetBySlug, got nil")
+			t.Fatal("Create() expected error from repository, got nil")
 		}
-
 		if errx.KindOf(err) != errx.Unavailable {
 			t.Errorf("error kind = %v, want %v", errx.KindOf(err), errx.Unavailable)
 		}
