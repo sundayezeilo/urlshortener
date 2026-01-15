@@ -44,7 +44,7 @@ type service struct {
 type ServiceConfig struct {
 	SlugGenerator  sluggen.Generator
 	SlugLength     int
-	SlugMaxRetries int // attempts when generating a unique slug (default: 3)
+	SlugMaxRetries int
 }
 
 // NewService creates a new service instance.
@@ -64,7 +64,7 @@ func NewService(repo Repository, config *ServiceConfig) Service {
 	}
 
 	retries := config.SlugMaxRetries
-	if retries <= 0 {
+	if retries < 0 {
 		retries = DefaultSlugMaxRetries
 	}
 
@@ -101,7 +101,11 @@ func (s *service) Create(ctx context.Context, req CreateLinkRequest) (Link, erro
 	}
 
 	// Generated slug path: retry on conflicts
-	for range s.slugMaxRetries {
+	maxAttempts := s.slugMaxRetries
+	if maxAttempts == 0 {
+		maxAttempts = 1 // At least one attempt
+	}
+	for range maxAttempts {
 		slug, err := s.slugGenerator.Generate(s.slugLength)
 		if err != nil {
 			return Link{}, errx.E(op, errx.Unavailable, err)
