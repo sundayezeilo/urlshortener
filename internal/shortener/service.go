@@ -68,6 +68,10 @@ func NewService(repo Repository, config *ServiceConfig) Service {
 		retries = DefaultSlugMaxRetries
 	}
 
+	if retries == 0 {
+		retries = 1 // At least one attempt
+	}
+
 	return &service{
 		repo:           repo,
 		slugGenerator:  slugGen,
@@ -102,9 +106,7 @@ func (s *service) Create(ctx context.Context, req CreateLinkRequest) (Link, erro
 
 	// Generated slug path: retry on conflicts
 	maxAttempts := s.slugMaxRetries
-	if maxAttempts == 0 {
-		maxAttempts = 1 // At least one attempt
-	}
+
 	for range maxAttempts {
 		slug, err := s.slugGenerator.Generate(s.slugLength)
 		if err != nil {
