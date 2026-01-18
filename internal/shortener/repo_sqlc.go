@@ -10,9 +10,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/sundayezeilo/urlshortener/idgen"
 	db "github.com/sundayezeilo/urlshortener/internal/db/sqlc"
 	"github.com/sundayezeilo/urlshortener/internal/errx"
-	"github.com/sundayezeilo/urlshortener/internal/idgen"
 )
 
 // querier is an internal interface that abstracts *db.Queries
