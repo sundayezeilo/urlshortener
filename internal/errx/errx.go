@@ -39,6 +39,30 @@ func E(op string, kind Kind, err error) error {
 	}
 }
 
+// String returns the string representation of the error kind.
+func (k Kind) String() string {
+	switch k {
+	case Unknown:
+		return "Unknown"
+	case NotFound:
+		return "NotFound"
+	case Conflict:
+		return "Conflict"
+	case Invalid:
+		return "Invalid"
+	case Unauthorized:
+		return "Unauthorized"
+	case Forbidden:
+		return "Forbidden"
+	case Unavailable:
+		return "Unavailable"
+	case Internal:
+		return "Internal"
+	default:
+		return fmt.Sprintf("Kind(%d)", k)
+	}
+}
+
 func (e *Error) Error() string {
 	if e.Err == nil {
 		return e.Op
