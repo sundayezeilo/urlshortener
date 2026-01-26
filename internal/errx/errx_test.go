@@ -270,3 +270,29 @@ func TestErrorChain(t *testing.T) {
 		}
 	})
 }
+
+func TestKind_String(t *testing.T) {
+	tests := []struct {
+		kind Kind
+		want string
+	}{
+		{Unknown, "Unknown"},
+		{NotFound, "NotFound"},
+		{Conflict, "Conflict"},
+		{Invalid, "Invalid"},
+		{Unauthorized, "Unauthorized"},
+		{Forbidden, "Forbidden"},
+		{Unavailable, "Unavailable"},
+		{Internal, "Internal"},
+		{Kind(99), "Kind(99)"}, // Unknown kind value
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			got := tt.kind.String()
+			if got != tt.want {
+				t.Errorf("Kind.String() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

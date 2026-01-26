@@ -280,7 +280,7 @@ func TestMapRepoError(t *testing.T) {
 	t.Run("maps unique constraint violation to Conflict", func(t *testing.T) {
 		pgErr := &pgconn.PgError{
 			Code:           "23505",
-			ConstraintName: "links_slug_unique_active",
+			ConstraintName: "links_slug_unique",
 		}
 
 		err := mapRepoError("test.op", pgErr)
@@ -389,7 +389,7 @@ func TestRepoCreate(t *testing.T) {
 
 	t.Run("returns Conflict error for duplicate slug", func(t *testing.T) {
 		now := time.Now()
-		pgErr := &pgconn.PgError{Code: "23505", ConstraintName: "links_slug_unique_active"}
+		pgErr := &pgconn.PgError{Code: "23505", ConstraintName: "links_slug_unique"}
 
 		mock := &mockQueries{
 			createLinkFunc: func(_ context.Context, _ db.CreateLinkParams) (db.Link, error) {
