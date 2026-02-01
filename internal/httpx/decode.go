@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 )
 
@@ -19,8 +20,11 @@ func DecodeJSON[T any](r *http.Request) (T, error) {
 	var zeroValue T
 
 	r.Body = http.MaxBytesReader(nil, r.Body, MaxRequestBodySize)
-	defer func (){
-		_ = r.Body.Close()	// Just to ignore golint warning
+	defer func() {
+		err := r.Body.Close() // Just to ignore golint warning
+		if err != nil {
+			slog.Warn("error closing request Body in DecodeJSON", "err", err.Error())
+		}
 	}()
 
 	decoder := json.NewDecoder(r.Body)

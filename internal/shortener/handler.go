@@ -61,11 +61,7 @@ func (h *Handler) CreateLink(w http.ResponseWriter, r *http.Request) {
 	// Extract request ID for tracing
 	requestID := httpx.GetRequestID(ctx)
 
-	logger := h.logger.With(
-		"request_id", requestID,
-		"method", r.Method,
-		"path", r.URL.Path,
-	)
+	logger := h.logger.With("request_id", requestID)
 
 	// Decode and validate request
 	req, err := httpx.DecodeJSON[HTTPCreateLinkRequest](r)
@@ -122,11 +118,7 @@ func (h *Handler) ResolveLink(w http.ResponseWriter, r *http.Request) {
 	// Extract request ID for tracing
 	requestID := httpx.GetRequestID(ctx)
 
-	logger := h.logger.With(
-		"request_id", requestID,
-		"method", r.Method,
-		"path", r.URL.Path,
-	)
+	logger := h.logger.With("request_id", requestID)
 
 	// Extract slug from URL path
 	slug := extractSlugFromPath(r.URL.Path)
