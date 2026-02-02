@@ -35,7 +35,7 @@ func TestBase62Generator_Generate(t *testing.T) {
 		seen := make(map[string]bool)
 
 		// Generate 1000 slugs and ensure they're all unique
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			slug, err := gen.Generate(10)
 			if err != nil {
 				t.Fatalf("Generate() unexpected error: %v", err)
@@ -102,24 +102,21 @@ func TestBase62Generator_Generate(t *testing.T) {
 		gen := NewBase62()
 		const goroutines = 50
 		const iterations = 100
-
 		var wg sync.WaitGroup
 		results := make(chan string, goroutines*iterations)
 		errChan := make(chan error, goroutines*iterations)
 
-		for i := 0; i < goroutines; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for j := 0; j < iterations; j++ {
-					slug, err := gen.Generate(8)
+		for range goroutines {
+			wg.Go(func() {
+				for range iterations {
+					slug, err := gen.Generate(7)
 					if err != nil {
 						errChan <- err
 						return
 					}
 					results <- slug
 				}
-			}()
+			})
 		}
 
 		wg.Wait()

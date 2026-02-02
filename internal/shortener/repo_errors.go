@@ -12,5 +12,5 @@ func isSlugUniqueViolation(err error) bool {
 		return false
 	}
 	return pgErr.Code == "23505" &&
-		pgErr.ConstraintName == "links_slug_unique_active"
+		pgErr.ConstraintName == "links_slug_unique"
 }
